@@ -13,14 +13,38 @@ const envSchema = z.object({
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 });
 
-const parsed = envSchema.safeParse(process.env);
+export type Env = z.infer<typeof envSchema>;
 
-if (!parsed.success) {
-  // Намеренно используем console.error: логгер зависит от env и на этом этапе ещё не готов.
-  // eslint-disable-next-line no-console
-  console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
-  process.exit(1);
+/**
+ * Валидирует process.env по envSchema и возвращает типизированный конфиг.
+ * Намеренно бросает обычную Error, а НЕ вызывает process.exit(): модуль
+ * конфигурации не должен решать за вызывающий код, как реагировать на
+ * невалидные данные, и не должен незаметно убивать процесс при импорте —
+ * это делало модуль неудобным для тестирования (импорт с "плохим" env убивал
+ * тестовый воркер). Теперь loadEnv() можно вызвать в try/catch или проверить
+ * через expect(() => loadEnv()).toThrow() (см. tests/env.test.ts).
+ */
+export function loadEnv(): Env {
+  const parsed = envSchema.safeParse(process.env);
+
+  if (!parsed.success) {
+    const details = JSON.stringify(parsed.error.flatten().fieldErrors);
+    throw new Error(`Invalid environment variables: ${details}`);
+  }
+
+  return parsed.data;
 }
 
-export const env = parsed.data;
-export type Env = typeof env;
+// Вычисляется один раз при первом импорте модуля — большинству файлов
+// проекта удобнее готовый объект `env`, а не вызов loadEnv() в каждом месте
+// (протаскивать env через dependency injection во все модули было бы
+// избыточным рефакторингом для MVP такого масштаба).
+//
+// Если переменные окружения невалидны, ошибка вылетает уже на этапе
+// импорта — до того, как отработает try/catch в bootstrap() из server.ts.
+// Node в этом случае печатает полный stack trace в stderr и завершает
+// процесс с ненулевым кодом сам, без нашего вмешательства. Поведение
+// "упасть с понятным сообщением при плохом конфиге" сохранено, но теперь
+// оно не спрятано внутри случайного модуля в виде побочного эффекта
+// process.exit(), а выражено как обычная (пусть и не пойманная здесь) ошибка.
+export const env: Env = loadEnv();
