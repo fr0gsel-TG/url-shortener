@@ -2,12 +2,13 @@ jest.mock('../src/repositories/urlRepository', () => ({
   existsByShortCode: jest.fn(),
   createUrl: jest.fn(),
   findByShortCode: jest.fn(),
-  incrementClicks: jest.fn().mockResolvedValue(undefined),
+  incrementClicks: jest.fn().mockResolvedValue(true),
 }));
 
 jest.mock('../src/cache/urlCache', () => ({
   getCachedUrl: jest.fn(),
   setCachedUrl: jest.fn().mockResolvedValue(undefined),
+  deleteCachedUrl: jest.fn().mockResolvedValue(undefined),
 }));
 
 import request from 'supertest';
@@ -19,12 +20,14 @@ const app = createApp();
 
 const mockedGetCachedUrl = cache.getCachedUrl as jest.Mock;
 const mockedSetCachedUrl = cache.setCachedUrl as jest.Mock;
+const mockedDeleteCachedUrl = cache.deleteCachedUrl as jest.Mock;
 const mockedFindByShortCode = repo.findByShortCode as jest.Mock;
 const mockedIncrementClicks = repo.incrementClicks as jest.Mock;
 
 describe('GET /:shortCode', () => {
   afterEach(() => {
     jest.clearAllMocks();
+    mockedIncrementClicks.mockResolvedValue(true);
   });
 
   it('cache MISS: читает из PostgreSQL, кладёт в Redis, редиректит и увеличивает clicks', async () => {
@@ -57,13 +60,32 @@ describe('GET /:shortCode', () => {
     expect(mockedIncrementClicks).toHaveBeenCalledWith('abc123');
   });
 
-  it('возвращает 404 для несуществующего shortCode', async () => {
+  it('cache HIT, но запись уже удалена из PostgreSQL: инвалидирует протухший кеш и возвращает 404', async () => {
+    mockedGetCachedUrl.mockResolvedValue('https://cached-but-deleted.example.com');
+    mockedIncrementClicks.mockResolvedValue(false); // UPDATE затронул 0 строк
+
+    const res = await request(app).get('/abc123');
+
+    expect(res.status).toBe(404);
+    expect(mockedDeleteCachedUrl).toHaveBeenCalledWith('abc123');
+  });
+
+  it('cache MISS + валидный по формату, но не существующий в PostgreSQL shortCode → 404', async () => {
     mockedGetCachedUrl.mockResolvedValue(null);
     mockedFindByShortCode.mockResolvedValue(null);
 
-    const res = await request(app).get('/doesnotexist');
+    const res = await request(app).get('/zzzzzz');
 
     expect(res.status).toBe(404);
     expect(mockedIncrementClicks).not.toHaveBeenCalled();
+  });
+
+  it('возвращает 404 сразу, НЕ обращаясь к Redis/PostgreSQL, если shortCode структурно некорректен', async () => {
+    // "doesnotexist" длиннее 6 символов — не может быть валидным shortCode в принципе.
+    const res = await request(app).get('/doesnotexist');
+
+    expect(res.status).toBe(404);
+    expect(mockedGetCachedUrl).not.toHaveBeenCalled();
+    expect(mockedFindByShortCode).not.toHaveBeenCalled();
   });
 });

@@ -38,11 +38,18 @@ describe('GET /api/stats/:shortCode', () => {
     });
   });
 
-  it('возвращает 404 для несуществующего shortCode', async () => {
+  it('возвращает 404 для валидного по формату, но не существующего shortCode', async () => {
     mockedFindByShortCode.mockResolvedValue(null);
 
+    const res = await request(app).get('/api/stats/zzzzzz');
+
+    expect(res.status).toBe(404);
+  });
+
+  it('возвращает 404 сразу, НЕ обращаясь к PostgreSQL, если shortCode структурно некорректен', async () => {
     const res = await request(app).get('/api/stats/doesnotexist');
 
     expect(res.status).toBe(404);
+    expect(mockedFindByShortCode).not.toHaveBeenCalled();
   });
 });
