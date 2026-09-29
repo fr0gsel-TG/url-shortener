@@ -29,3 +29,12 @@ export async function getCachedUrl(shortCode: string): Promise<string | null> {
 export async function setCachedUrl(shortCode: string, originalUrl: string): Promise<void> {
   await redisClient.set(cacheKey(shortCode), originalUrl, { EX: env.CACHE_TTL_SECONDS });
 }
+
+/**
+ * Удаляет протухшую запись из кеша — используется, когда Redis ещё хранит
+ * значение, но соответствующей записи в PostgreSQL уже нет (источник истины
+ * важнее кеша).
+ */
+export async function deleteCachedUrl(shortCode: string): Promise<void> {
+  await redisClient.del(cacheKey(shortCode));
+}

@@ -55,7 +55,14 @@ export async function createUrl(shortCode: string, originalUrl: string): Promise
  * Атомарно увеличивает счётчик переходов на 1.
  * Используется как при cache MISS, так и при cache HIT — кешируется только
  * originalUrl, а не clicks, поэтому счётчик всегда актуален в БД.
+ *
+ * Возвращает true, если строка с таким short_code реально была найдена и
+ * обновлена, и false — если нет (например, запись удалили из PostgreSQL
+ * напрямую, а протухшее значение всё ещё лежит в Redis). Вызывающий код
+ * (см. urlService.resolveOriginalUrl) использует это, чтобы не молча
+ * редиректить на данные, которых уже нет.
  */
-export async function incrementClicks(shortCode: string): Promise<void> {
-  await pool.query('UPDATE urls SET clicks = clicks + 1 WHERE short_code = $1', [shortCode]);
+export async function incrementClicks(shortCode: string): Promise<boolean> {
+  const result = await pool.query('UPDATE urls SET clicks = clicks + 1 WHERE short_code = $1', [shortCode]);
+  return (result.rowCount ?? 0) > 0;
 }
