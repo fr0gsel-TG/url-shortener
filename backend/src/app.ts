@@ -5,10 +5,7 @@ import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import urlRoutes from './routes/urlRoutes';
 
-/**
- * Фабрика Express-приложения. Вынесена отдельно от server.ts,
- * чтобы приложение можно было создавать в тестах без реального listen().
- */
+
 export function createApp(): Application {
   const app = express();
 

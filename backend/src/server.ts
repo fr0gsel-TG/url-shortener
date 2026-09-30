@@ -1,3 +1,10 @@
+// Должен быть самым первым импортом файла: подгружает переменные из .env в
+// process.env ДО того, как любой другой импорт (транзитивно, через app.ts)
+// доберётся до config/env.ts и провалидирует process.env. config/env.ts
+// намеренно НЕ делает этого сам — он должен быть чистой функцией от
+// process.env, без скрытого чтения файлов с диска (это же сделало модуль
+// тестируемым в изоляции, см. tests/env.test.ts).
+import 'dotenv/config';
 import type { Server } from 'http';
 import { createApp } from './app';
 import { env } from './config/env';

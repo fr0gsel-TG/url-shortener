@@ -20,10 +20,14 @@ describe('loadEnv', () => {
     delete process.env.DATABASE_URL;
     delete process.env.REDIS_URL;
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { loadEnv } = require('../src/config/env') as typeof import('../src/config/env');
-
-    expect(() => loadEnv()).toThrow(/Invalid environment variables/);
+    // env вычисляется eagerly при импорте модуля (см. `export const env`
+    // в src/config/env.ts), поэтому ошибку бросает уже сам require(), а не
+    // последующий явный вызов loadEnv() — именно require() и нужно
+    // оборачивать в expect(...).toThrow().
+    expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require('../src/config/env');
+    }).toThrow(/Invalid environment variables/);
   });
 
   it('возвращает распарсенный конфиг, если все обязательные переменные заданы', () => {
